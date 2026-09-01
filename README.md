@@ -64,6 +64,23 @@ npm run dev
 
 Visit `http://localhost:3000`.
 
+## Deploying to Render
+
+This repo includes a `render.yaml` blueprint.
+
+1. In Render, click **New → Blueprint**, pick this repo and the branch you want to deploy.
+2. Render reads `render.yaml` and creates a single **Web Service** (`npm install && npm run build` / `npm run start`, free plan).
+3. It will prompt you for the env vars marked `sync: false` — fill in:
+   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+   - `CLERK_SECRET_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - (`SUPABASE_URL` and the Clerk redirect URLs are already set in `render.yaml`)
+4. Deploy. The app binds to Render's `$PORT` automatically via the `start` script.
+
+Note: Render's free plan spins the service down after inactivity, so the first request after a quiet period takes ~30s (cold start).
+
+If you'd rather configure it by hand instead of via the blueprint, create a **Web Service** with build command `npm install && npm run build`, start command `npm run start`, and add the same env vars from `.env.example`.
+
 ## Auth model
 
 Auth is handled entirely by Clerk — there's no Supabase Auth involved. Every database read/write goes through **server-only code** (Server Actions and Server Components) using the Supabase `service_role` key, which bypasses row level security. Each server action independently re-checks the signed-in Clerk `userId` against the row's `owner_id` before reading or writing anything, and public routes (`/forms/[formId]`) only ever touch forms with `status = 'published'`.
