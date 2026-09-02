@@ -1,0 +1,10 @@
+[build]
+  command = "npm run build"
+
+[build.environment]
+  # These two are intentionally public: NEXT_PUBLIC_* vars ship to the
+  # browser by design, and SUPABASE_URL is just the project's base URL,
+  # not a credential. The real secrets (CLERK_SECRET_KEY,
+  # SUPABASE_SERVICE_ROLE_KEY) are never referenced outside server code,
+  # so they correctly don't show up in the scan.
+  SECRETS_SCAN_OMIT_KEYS = "SUPABASE_URL,NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"
