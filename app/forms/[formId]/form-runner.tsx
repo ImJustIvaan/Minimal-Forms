@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { AnswerValue, FormRow, PublicQuestionRow } from "@/lib/types";
-import { cx } from "@/lib/utils";
+import { cx, hexToRgbChannels, resolveAccent } from "@/lib/utils";
 import { submitResponseAction } from "./actions";
 
 type Step = "intro" | "question" | "submitting" | "done" | "error";
@@ -14,29 +14,34 @@ export function FormRunner({
   form: FormRow;
   questions: PublicQuestionRow[];
 }) {
-  const [step, setStep] = useState<Step>("intro");
+  const isList = form.layout === "list";
+  const [step, setStep] = useState<Step>(isList ? "question" : "intro");
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
   const [errorMessage, setErrorMessage] = useState("");
+  const [missingIds, setMissingIds] = useState<Set<string>>(new Set());
 
   const question = questions[index];
   const progress = questions.length
     ? Math.round(((index + (step === "intro" ? 0 : 1)) / questions.length) * 100)
     : 0;
 
-  function setAnswer(value: AnswerValue) {
-    if (!question) return;
-    setAnswers((prev) => ({ ...prev, [question.id]: value }));
+  function updateAnswer(questionId: string, value: AnswerValue) {
+    setAnswers((prev) => ({ ...prev, [questionId]: value }));
   }
 
-  const backgroundStyle: React.CSSProperties | undefined = form.background_image_url
-    ? {
-        backgroundImage: `linear-gradient(rgba(250,250,249,0.88), rgba(250,250,249,0.88)), url(${form.background_image_url})`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-        backgroundAttachment: "fixed",
-      }
-    : undefined;
+  const themeStyle = {
+    ...(form.background_image_url
+      ? {
+          backgroundImage: `linear-gradient(rgba(250,250,249,0.88), rgba(250,250,249,0.88)), url(${form.background_image_url})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundAttachment: "fixed",
+        }
+      : {}),
+    "--accent": resolveAccent(form.accent_color),
+    "--accent-rgb": hexToRgbChannels(form.accent_color),
+  } as React.CSSProperties;
 
   function isAnswered(q: PublicQuestionRow) {
     const value = answers[q.id];
@@ -44,6 +49,23 @@ export function FormRunner({
     if (value === undefined || value === null || value === "") return false;
     if (Array.isArray(value) && value.length === 0) return false;
     return true;
+  }
+
+  async function submitAll() {
+    setStep("submitting");
+    try {
+      await submitResponseAction(form.id, answers);
+      if (form.redirect_url) {
+        window.location.href = form.redirect_url;
+        return;
+      }
+      setStep("done");
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Something went wrong."
+      );
+      setStep("error");
+    }
   }
 
   async function goNext() {
@@ -54,16 +76,7 @@ export function FormRunner({
     setErrorMessage("");
 
     if (index === questions.length - 1) {
-      setStep("submitting");
-      try {
-        await submitResponseAction(form.id, answers);
-        setStep("done");
-      } catch (err) {
-        setErrorMessage(
-          err instanceof Error ? err.message : "Something went wrong."
-        );
-        setStep("error");
-      }
+      await submitAll();
       return;
     }
 
@@ -79,43 +92,40 @@ export function FormRunner({
     }
   }
 
-  if (questions.length === 0) {
-    return (
-      <Centered background={backgroundStyle}>
-        <p className="text-ink/50">This form has no questions yet.</p>
-      </Centered>
-    );
+  async function handleListSubmit() {
+    const missing = questions.filter((q) => !isAnswered(q)).map((q) => q.id);
+    if (missing.length > 0) {
+      setMissingIds(new Set(missing));
+      return;
+    }
+    setMissingIds(new Set());
+    await submitAll();
   }
 
-  if (step === "intro") {
+  if (questions.length === 0) {
     return (
-      <Centered background={backgroundStyle}>
-        <h1 className="text-4xl font-semibold tracking-tight">{form.title}</h1>
-        {form.description && (
-          <p className="mt-4 text-lg text-ink/60">{form.description}</p>
-        )}
-        <button
-          onClick={() => setStep("question")}
-          className="mt-8 rounded-full bg-accent px-8 py-3 text-sm font-semibold text-white transition-fast hover:opacity-90"
-        >
-          Start
-        </button>
+      <Centered background={themeStyle}>
+        <p className="text-ink/50">This form has no questions yet.</p>
       </Centered>
     );
   }
 
   if (step === "done") {
     return (
-      <Centered background={backgroundStyle}>
-        <h1 className="text-3xl font-semibold tracking-tight">Thank you!</h1>
-        <p className="mt-3 text-ink/60">Your response has been recorded.</p>
+      <Centered background={themeStyle}>
+        <h1 className="text-3xl font-semibold tracking-tight">
+          {form.thank_you_heading || "Thank you!"}
+        </h1>
+        <p className="mt-3 text-ink/60">
+          {form.thank_you_message || "Your response has been recorded."}
+        </p>
       </Centered>
     );
   }
 
   if (step === "error") {
     return (
-      <Centered background={backgroundStyle}>
+      <Centered background={themeStyle}>
         <h1 className="text-2xl font-semibold tracking-tight">
           Couldn&apos;t submit
         </h1>
@@ -130,11 +140,86 @@ export function FormRunner({
     );
   }
 
+  if (isList) {
+    return (
+      <div className="min-h-screen bg-paper text-ink" style={themeStyle}>
+        <div className="mx-auto max-w-2xl px-6 py-16">
+          <h1 className="text-4xl font-semibold tracking-tight">{form.title}</h1>
+          {form.description && (
+            <p className="mt-3 text-lg text-ink/60">{form.description}</p>
+          )}
+
+          <div className="mt-10 flex flex-col gap-10">
+            {questions.map((q, i) => (
+              <div key={q.id}>
+                <h2 className="text-lg font-semibold">
+                  {i + 1}. {q.title}
+                  {q.required && (
+                    <span className="ml-1 text-[var(--accent)]">*</span>
+                  )}
+                </h2>
+                {q.description && (
+                  <p className="mt-1 text-sm text-ink/50">{q.description}</p>
+                )}
+                {q.image_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={q.image_url}
+                    alt=""
+                    className="mt-3 max-h-72 w-full rounded-xl border border-ink/10 object-cover"
+                  />
+                )}
+                <div className="mt-3">
+                  <QuestionInput
+                    question={q}
+                    value={answers[q.id]}
+                    onChange={(v) => updateAnswer(q.id, v)}
+                    onEnter={() => {}}
+                  />
+                </div>
+                {missingIds.has(q.id) && (
+                  <p className="mt-2 text-sm text-red-600">
+                    This question is required.
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={handleListSubmit}
+            disabled={step === "submitting"}
+            className="mt-10 rounded-full bg-[var(--accent)] px-8 py-3 text-sm font-semibold text-white transition-fast hover:opacity-90 disabled:opacity-50"
+          >
+            {step === "submitting" ? "Submitting…" : "Submit"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "intro") {
+    return (
+      <Centered background={themeStyle}>
+        <h1 className="text-4xl font-semibold tracking-tight">{form.title}</h1>
+        {form.description && (
+          <p className="mt-4 text-lg text-ink/60">{form.description}</p>
+        )}
+        <button
+          onClick={() => setStep("question")}
+          className="mt-8 rounded-full bg-[var(--accent)] px-8 py-3 text-sm font-semibold text-white transition-fast hover:opacity-90"
+        >
+          Start
+        </button>
+      </Centered>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen flex-col bg-paper text-ink" style={backgroundStyle}>
+    <div className="flex min-h-screen flex-col bg-paper text-ink" style={themeStyle}>
       <div className="h-1 w-full bg-ink/10">
         <div
-          className="h-1 bg-accent transition-all"
+          className="h-1 bg-[var(--accent)] transition-all"
           style={{ width: `${progress}%` }}
         />
       </div>
@@ -145,7 +230,9 @@ export function FormRunner({
         </span>
         <h2 className="mt-2 text-2xl font-semibold tracking-tight">
           {question.title}
-          {question.required && <span className="ml-1 text-accent">*</span>}
+          {question.required && (
+            <span className="ml-1 text-[var(--accent)]">*</span>
+          )}
         </h2>
         {question.description && (
           <p className="mt-2 text-ink/50">{question.description}</p>
@@ -163,8 +250,9 @@ export function FormRunner({
           <QuestionInput
             question={question}
             value={answers[question.id]}
-            onChange={setAnswer}
+            onChange={(v) => updateAnswer(question.id, v)}
             onEnter={goNext}
+            autoFocus
           />
         </div>
 
@@ -219,11 +307,13 @@ function QuestionInput({
   value,
   onChange,
   onEnter,
+  autoFocus,
 }: {
   question: PublicQuestionRow;
   value: AnswerValue;
   onChange: (value: AnswerValue) => void;
   onEnter: () => void;
+  autoFocus?: boolean;
 }) {
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -238,12 +328,12 @@ function QuestionInput({
     case "number":
       return (
         <input
-          autoFocus
           type={question.type === "number" ? "number" : question.type === "email" ? "email" : "text"}
+          autoFocus={autoFocus}
           value={(value as string) ?? ""}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
-          className="w-full border-0 border-b-2 border-ink/20 bg-transparent py-2 text-xl outline-none focus:border-accent"
+          className="w-full border-0 border-b-2 border-ink/20 bg-transparent py-2 text-xl outline-none focus:border-[var(--accent)]"
           placeholder="Type your answer"
         />
       );
@@ -251,11 +341,11 @@ function QuestionInput({
     case "long_text":
       return (
         <textarea
-          autoFocus
           value={(value as string) ?? ""}
           onChange={(e) => onChange(e.target.value)}
           rows={4}
-          className="w-full rounded-lg border border-ink/20 bg-white p-3 text-lg outline-none focus:border-accent"
+          autoFocus={autoFocus}
+          className="w-full rounded-lg border border-ink/20 bg-white p-3 text-lg outline-none focus:border-[var(--accent)]"
           placeholder="Type your answer"
         />
       );
@@ -263,11 +353,11 @@ function QuestionInput({
     case "date":
       return (
         <input
-          autoFocus
           type="date"
+          autoFocus={autoFocus}
           value={(value as string) ?? ""}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full border-0 border-b-2 border-ink/20 bg-transparent py-2 text-xl outline-none focus:border-accent"
+          className="w-full border-0 border-b-2 border-ink/20 bg-transparent py-2 text-xl outline-none focus:border-[var(--accent)]"
         />
       );
 
@@ -281,7 +371,7 @@ function QuestionInput({
               className={cx(
                 "rounded-xl border px-6 py-3 text-sm font-medium transition-fast",
                 value === opt
-                  ? "border-accent bg-accent/10 text-accent"
+                  ? "border-[var(--accent)] bg-[rgb(var(--accent-rgb)/0.1)] text-[var(--accent)]"
                   : "border-ink/15 hover:bg-ink/5"
               )}
             >
@@ -301,7 +391,7 @@ function QuestionInput({
               className={cx(
                 "flex h-12 w-12 items-center justify-center rounded-full border text-lg font-semibold transition-fast",
                 value === n
-                  ? "border-accent bg-accent text-white"
+                  ? "border-[var(--accent)] bg-[var(--accent)] text-white"
                   : "border-ink/15 hover:bg-ink/5"
               )}
             >
@@ -314,11 +404,11 @@ function QuestionInput({
     case "dropdown":
       return (
         <select
-          autoFocus
           value={(value as string) ?? ""}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full rounded-lg border border-ink/20 bg-white p-3 text-lg outline-none focus:border-accent"
+          className="w-full rounded-lg border border-ink/20 bg-white p-3 text-lg outline-none focus:border-[var(--accent)]"
         >
+          autoFocus={autoFocus}
           <option value="" disabled>
             Select an option
           </option>
@@ -340,7 +430,7 @@ function QuestionInput({
               className={cx(
                 "rounded-xl border px-4 py-3 text-left text-lg transition-fast",
                 value === opt
-                  ? "border-accent bg-accent/10 text-accent"
+                  ? "border-[var(--accent)] bg-[rgb(var(--accent-rgb)/0.1)] text-[var(--accent)]"
                   : "border-ink/15 hover:bg-ink/5"
               )}
             >
@@ -369,7 +459,7 @@ function QuestionInput({
                 className={cx(
                   "rounded-xl border px-4 py-3 text-left text-lg transition-fast",
                   checked
-                    ? "border-accent bg-accent/10 text-accent"
+                    ? "border-[var(--accent)] bg-[rgb(var(--accent-rgb)/0.1)] text-[var(--accent)]"
                     : "border-ink/15 hover:bg-ink/5"
                 )}
               >

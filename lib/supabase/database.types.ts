@@ -10,6 +10,11 @@ export interface Database {
           status: string;
           accepting_responses: boolean;
           background_image_url: string | null;
+          accent_color: string | null;
+          layout: string;
+          thank_you_heading: string | null;
+          thank_you_message: string | null;
+          redirect_url: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -21,6 +26,11 @@ export interface Database {
           status?: string;
           accepting_responses?: boolean;
           background_image_url?: string | null;
+          accent_color?: string | null;
+          layout?: string;
+          thank_you_heading?: string | null;
+          thank_you_message?: string | null;
+          redirect_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -32,6 +42,11 @@ export interface Database {
           status?: string;
           accepting_responses?: boolean;
           background_image_url?: string | null;
+          accent_color?: string | null;
+          layout?: string;
+          thank_you_heading?: string | null;
+          thank_you_message?: string | null;
+          redirect_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };

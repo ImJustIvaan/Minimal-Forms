@@ -31,6 +31,21 @@ export const CHOICE_TYPES: QuestionType[] = [
 
 export type FormStatus = "draft" | "published";
 
+export type FormLayout = "conversational" | "list";
+
+export const FORM_LAYOUTS: { value: FormLayout; label: string; description: string }[] = [
+  {
+    value: "conversational",
+    label: "One question at a time",
+    description: "A focused, Typeform-style stepper.",
+  },
+  {
+    value: "list",
+    label: "All questions on one page",
+    description: "A single scrollable page, like Google/MS Forms.",
+  },
+];
+
 export interface FormRow {
   id: string;
   owner_id: string;
@@ -39,6 +54,11 @@ export interface FormRow {
   status: FormStatus;
   accepting_responses: boolean;
   background_image_url: string | null;
+  accent_color: string | null;
+  layout: FormLayout;
+  thank_you_heading: string | null;
+  thank_you_message: string | null;
+  redirect_url: string | null;
   created_at: string;
   updated_at: string;
 }

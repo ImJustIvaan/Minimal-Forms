@@ -4,7 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { deleteImageByUrl, uploadImage } from "@/lib/supabase/storage";
-import type { FormStatus, QuestionType } from "@/lib/types";
+import type { FormLayout, FormStatus, QuestionType } from "@/lib/types";
 
 async function assertOwnsForm(formId: string) {
   const { userId } = await auth();
@@ -24,12 +24,52 @@ async function assertOwnsForm(formId: string) {
   return db;
 }
 
+function normalizeRedirectUrl(value: string | null | undefined) {
+  if (value === undefined) return undefined;
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error("Enter a full URL, e.g. https://example.com/thanks");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("The redirect URL must start with http:// or https://");
+  }
+  return parsed.toString();
+}
+
+function normalizeAccentColor(value: string | null | undefined) {
+  if (value === undefined) return undefined;
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  if (!/^#[0-9a-fA-F]{6}$/.test(trimmed)) {
+    throw new Error("Enter a color as a hex code, e.g. #4f46e5");
+  }
+  return trimmed.toLowerCase();
+}
+
 export async function updateFormMetaAction(
   formId: string,
-  patch: { title?: string; description?: string }
+  patch: {
+    title?: string;
+    description?: string;
+    accent_color?: string | null;
+    layout?: FormLayout;
+    thank_you_heading?: string | null;
+    thank_you_message?: string | null;
+    redirect_url?: string | null;
+  }
 ) {
   const db = await assertOwnsForm(formId);
-  const { error } = await db.from("forms").update(patch).eq("id", formId);
+  const normalized = {
+    ...patch,
+    accent_color: normalizeAccentColor(patch.accent_color),
+    redirect_url: normalizeRedirectUrl(patch.redirect_url),
+  };
+  const { error } = await db.from("forms").update(normalized).eq("id", formId);
   if (error) throw new Error(error.message);
   revalidatePath(`/dashboard/forms/${formId}/edit`);
   revalidatePath("/dashboard");
