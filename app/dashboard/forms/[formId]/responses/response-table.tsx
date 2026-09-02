@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import type { QuestionRow } from "@/lib/types";
-import { formatDateTime } from "@/lib/utils";
+import { cx, formatDateTime } from "@/lib/utils";
 import { deleteResponseAction } from "./actions";
 
 export interface ResponseWithAnswers {
@@ -49,11 +49,30 @@ export function ResponseTable({
               <td className="whitespace-nowrap px-4 py-3 text-ink/60">
                 {formatDateTime(r.submitted_at)}
               </td>
-              {questions.map((q) => (
-                <td key={q.id} className="max-w-xs px-4 py-3">
-                  {formatAnswer(r.answers[q.id])}
-                </td>
-              ))}
+              {questions.map((q) => {
+                const value = r.answers[q.id];
+                const isGraded = q.type === "multiple_choice" && q.correct_option;
+                return (
+                  <td key={q.id} className="max-w-xs px-4 py-3">
+                    {formatAnswer(value)}
+                    {isGraded && value !== undefined && value !== null && (
+                      <span
+                        className={cx(
+                          "ml-1.5",
+                          value === q.correct_option ? "text-emerald-600" : "text-red-600"
+                        )}
+                        title={
+                          value === q.correct_option
+                            ? "Correct"
+                            : `Correct answer: ${q.correct_option}`
+                        }
+                      >
+                        {value === q.correct_option ? "✓" : "✗"}
+                      </span>
+                    )}
+                  </td>
+                );
+              })}
               <td className="px-4 py-3 text-right">
                 <button
                   onClick={() => handleDelete(r.id)}

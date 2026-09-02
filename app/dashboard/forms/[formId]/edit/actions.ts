@@ -3,6 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { deleteImageByUrl, uploadImage } from "@/lib/supabase/storage";
 import type { FormStatus, QuestionType } from "@/lib/types";
 
 async function assertOwnsForm(formId: string) {
@@ -40,6 +41,51 @@ export async function setFormStatusAction(formId: string, status: FormStatus) {
   if (error) throw new Error(error.message);
   revalidatePath(`/dashboard/forms/${formId}/edit`);
   revalidatePath("/dashboard");
+}
+
+export async function uploadFormBackgroundAction(formId: string, formData: FormData) {
+  const db = await assertOwnsForm(formId);
+
+  const file = formData.get("file");
+  if (!(file instanceof File)) throw new Error("No file provided.");
+
+  const { data: existing } = await db
+    .from("forms")
+    .select("background_image_url")
+    .eq("id", formId)
+    .single();
+
+  const url = await uploadImage(file, `forms/${formId}/background`);
+
+  const { error } = await db
+    .from("forms")
+    .update({ background_image_url: url })
+    .eq("id", formId);
+  if (error) throw new Error(error.message);
+
+  await deleteImageByUrl(existing?.background_image_url);
+
+  revalidatePath(`/dashboard/forms/${formId}/edit`);
+  return url;
+}
+
+export async function removeFormBackgroundAction(formId: string) {
+  const db = await assertOwnsForm(formId);
+
+  const { data: existing } = await db
+    .from("forms")
+    .select("background_image_url")
+    .eq("id", formId)
+    .single();
+
+  const { error } = await db
+    .from("forms")
+    .update({ background_image_url: null })
+    .eq("id", formId);
+  if (error) throw new Error(error.message);
+
+  await deleteImageByUrl(existing?.background_image_url);
+  revalidatePath(`/dashboard/forms/${formId}/edit`);
 }
 
 export async function setAcceptingResponsesAction(
@@ -97,6 +143,7 @@ export async function updateQuestionAction(
     required: boolean;
     options: string[];
     type: QuestionType;
+    correct_option: string | null;
   }>
 ) {
   const db = await assertOwnsForm(formId);
@@ -109,14 +156,74 @@ export async function updateQuestionAction(
   revalidatePath(`/dashboard/forms/${formId}/edit`);
 }
 
+export async function uploadQuestionImageAction(
+  formId: string,
+  questionId: string,
+  formData: FormData
+) {
+  const db = await assertOwnsForm(formId);
+
+  const file = formData.get("file");
+  if (!(file instanceof File)) throw new Error("No file provided.");
+
+  const { data: existing } = await db
+    .from("questions")
+    .select("image_url")
+    .eq("id", questionId)
+    .single();
+
+  const url = await uploadImage(file, `forms/${formId}/questions/${questionId}`);
+
+  const { error } = await db
+    .from("questions")
+    .update({ image_url: url })
+    .eq("id", questionId)
+    .eq("form_id", formId);
+  if (error) throw new Error(error.message);
+
+  await deleteImageByUrl(existing?.image_url);
+
+  revalidatePath(`/dashboard/forms/${formId}/edit`);
+  return url;
+}
+
+export async function removeQuestionImageAction(formId: string, questionId: string) {
+  const db = await assertOwnsForm(formId);
+
+  const { data: existing } = await db
+    .from("questions")
+    .select("image_url")
+    .eq("id", questionId)
+    .single();
+
+  const { error } = await db
+    .from("questions")
+    .update({ image_url: null })
+    .eq("id", questionId)
+    .eq("form_id", formId);
+  if (error) throw new Error(error.message);
+
+  await deleteImageByUrl(existing?.image_url);
+  revalidatePath(`/dashboard/forms/${formId}/edit`);
+}
+
 export async function deleteQuestionAction(formId: string, questionId: string) {
   const db = await assertOwnsForm(formId);
+
+  const { data: existing } = await db
+    .from("questions")
+    .select("image_url")
+    .eq("id", questionId)
+    .single();
+
   const { error } = await db
     .from("questions")
     .delete()
     .eq("id", questionId)
     .eq("form_id", formId);
   if (error) throw new Error(error.message);
+
+  await deleteImageByUrl(existing?.image_url);
   revalidatePath(`/dashboard/forms/${formId}/edit`);
 }
 

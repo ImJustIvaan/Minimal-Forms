@@ -38,6 +38,7 @@ export interface FormRow {
   description: string;
   status: FormStatus;
   accepting_responses: boolean;
+  background_image_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -50,9 +51,15 @@ export interface QuestionRow {
   description: string;
   required: boolean;
   options: string[];
+  image_url: string | null;
+  /** For `multiple_choice` questions: the option string that counts as correct, if this is a quiz question. */
+  correct_option: string | null;
   position: number;
   created_at: string;
 }
+
+/** The subset of a question sent to respondents — never includes the answer key. */
+export type PublicQuestionRow = Omit<QuestionRow, "correct_option">;
 
 export interface ResponseRow {
   id: string;

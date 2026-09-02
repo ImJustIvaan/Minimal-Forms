@@ -3,6 +3,12 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { FormRow, QuestionRow } from "@/lib/types";
 import { FormRunner } from "./form-runner";
 
+/** Strips the answer key before this ever reaches the browser. */
+function toPublicQuestion({ correct_option, ...rest }: QuestionRow) {
+  void correct_option;
+  return rest;
+}
+
 export default async function PublicFormPage({
   params,
 }: {
@@ -39,5 +45,10 @@ export default async function PublicFormPage({
     .order("position", { ascending: true })
     .returns<QuestionRow[]>();
 
-  return <FormRunner form={form} questions={questions ?? []} />;
+  return (
+    <FormRunner
+      form={form}
+      questions={(questions ?? []).map(toPublicQuestion)}
+    />
+  );
 }

@@ -9,6 +9,7 @@ export interface Database {
           description: string;
           status: string;
           accepting_responses: boolean;
+          background_image_url: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -19,6 +20,7 @@ export interface Database {
           description?: string;
           status?: string;
           accepting_responses?: boolean;
+          background_image_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -29,6 +31,7 @@ export interface Database {
           description?: string;
           status?: string;
           accepting_responses?: boolean;
+          background_image_url?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -43,6 +46,8 @@ export interface Database {
           description: string;
           required: boolean;
           options: string[];
+          image_url: string | null;
+          correct_option: string | null;
           position: number;
           created_at: string;
         };
@@ -54,6 +59,8 @@ export interface Database {
           description?: string;
           required?: boolean;
           options?: string[];
+          image_url?: string | null;
+          correct_option?: string | null;
           position?: number;
           created_at?: string;
         };
@@ -65,6 +72,8 @@ export interface Database {
           description?: string;
           required?: boolean;
           options?: string[];
+          image_url?: string | null;
+          correct_option?: string | null;
           position?: number;
           created_at?: string;
         };

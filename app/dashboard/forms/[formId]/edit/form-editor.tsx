@@ -1,16 +1,18 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import type { FormRow, QuestionRow, QuestionType } from "@/lib/types";
 import { QUESTION_TYPES } from "@/lib/types";
 import { cx } from "@/lib/utils";
 import { QuestionEditor } from "./question-editor";
 import {
   addQuestionAction,
+  removeFormBackgroundAction,
   reorderQuestionsAction,
   setAcceptingResponsesAction,
   setFormStatusAction,
   updateFormMetaAction,
+  uploadFormBackgroundAction,
 } from "./actions";
 
 export function FormEditor({
@@ -28,6 +30,10 @@ export function FormEditor({
   const [addType, setAddType] = useState<QuestionType>("short_text");
   const [copied, setCopied] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [background, setBackground] = useState(form.background_image_url);
+  const [bgError, setBgError] = useState("");
+  const [isUploadingBg, setIsUploadingBg] = useState(false);
+  const bgInputRef = useRef<HTMLInputElement>(null);
 
   const publicUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -71,6 +77,29 @@ export function FormEditor({
     await navigator.clipboard.writeText(publicUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  }
+
+  async function handleBackgroundChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setBgError("");
+    setIsUploadingBg(true);
+    try {
+      const formData = new FormData();
+      formData.set("file", file);
+      const url = await uploadFormBackgroundAction(form.id, formData);
+      setBackground(url);
+    } catch (err) {
+      setBgError(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setIsUploadingBg(false);
+    }
+  }
+
+  function handleRemoveBackground() {
+    setBackground(null);
+    startTransition(() => removeFormBackgroundAction(form.id));
   }
 
   return (
@@ -135,6 +164,45 @@ export function FormEditor({
           rows={2}
           className="mt-2 w-full resize-none border-0 bg-transparent text-ink/60 outline-none"
         />
+
+        <div className="mt-4 border-t border-ink/10 pt-4">
+          <p className="text-xs font-medium text-ink/50">Background image</p>
+          <div className="mt-2 flex items-center gap-3">
+            {background && (
+              <div
+                className="h-16 w-28 shrink-0 rounded-lg border border-ink/10 bg-cover bg-center"
+                style={{ backgroundImage: `url(${background})` }}
+              />
+            )}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => bgInputRef.current?.click()}
+                disabled={isUploadingBg}
+                className="rounded-full border border-ink/15 px-4 py-2 text-sm font-medium hover:bg-ink/5 disabled:opacity-50"
+              >
+                {isUploadingBg ? "Uploading…" : background ? "Change image" : "Upload image"}
+              </button>
+              {background && (
+                <button
+                  type="button"
+                  onClick={handleRemoveBackground}
+                  className="text-sm font-medium text-red-600 hover:underline"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            <input
+              ref={bgInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              onChange={handleBackgroundChange}
+              className="hidden"
+            />
+          </div>
+          {bgError && <p className="mt-2 text-sm text-red-600">{bgError}</p>}
+        </div>
       </div>
 
       <div className="mt-6 flex flex-col gap-4">

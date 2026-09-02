@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { AnswerValue, FormRow, QuestionRow } from "@/lib/types";
+import type { AnswerValue, FormRow, PublicQuestionRow } from "@/lib/types";
 import { cx } from "@/lib/utils";
 import { submitResponseAction } from "./actions";
 
@@ -12,7 +12,7 @@ export function FormRunner({
   questions,
 }: {
   form: FormRow;
-  questions: QuestionRow[];
+  questions: PublicQuestionRow[];
 }) {
   const [step, setStep] = useState<Step>("intro");
   const [index, setIndex] = useState(0);
@@ -29,7 +29,16 @@ export function FormRunner({
     setAnswers((prev) => ({ ...prev, [question.id]: value }));
   }
 
-  function isAnswered(q: QuestionRow) {
+  const backgroundStyle: React.CSSProperties | undefined = form.background_image_url
+    ? {
+        backgroundImage: `linear-gradient(rgba(250,250,249,0.88), rgba(250,250,249,0.88)), url(${form.background_image_url})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundAttachment: "fixed",
+      }
+    : undefined;
+
+  function isAnswered(q: PublicQuestionRow) {
     const value = answers[q.id];
     if (!q.required) return true;
     if (value === undefined || value === null || value === "") return false;
@@ -72,7 +81,7 @@ export function FormRunner({
 
   if (questions.length === 0) {
     return (
-      <Centered>
+      <Centered background={backgroundStyle}>
         <p className="text-ink/50">This form has no questions yet.</p>
       </Centered>
     );
@@ -80,7 +89,7 @@ export function FormRunner({
 
   if (step === "intro") {
     return (
-      <Centered>
+      <Centered background={backgroundStyle}>
         <h1 className="text-4xl font-semibold tracking-tight">{form.title}</h1>
         {form.description && (
           <p className="mt-4 text-lg text-ink/60">{form.description}</p>
@@ -97,7 +106,7 @@ export function FormRunner({
 
   if (step === "done") {
     return (
-      <Centered>
+      <Centered background={backgroundStyle}>
         <h1 className="text-3xl font-semibold tracking-tight">Thank you!</h1>
         <p className="mt-3 text-ink/60">Your response has been recorded.</p>
       </Centered>
@@ -106,7 +115,7 @@ export function FormRunner({
 
   if (step === "error") {
     return (
-      <Centered>
+      <Centered background={backgroundStyle}>
         <h1 className="text-2xl font-semibold tracking-tight">
           Couldn&apos;t submit
         </h1>
@@ -122,7 +131,7 @@ export function FormRunner({
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-paper text-ink">
+    <div className="flex min-h-screen flex-col bg-paper text-ink" style={backgroundStyle}>
       <div className="h-1 w-full bg-ink/10">
         <div
           className="h-1 bg-accent transition-all"
@@ -140,6 +149,14 @@ export function FormRunner({
         </h2>
         {question.description && (
           <p className="mt-2 text-ink/50">{question.description}</p>
+        )}
+        {question.image_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={question.image_url}
+            alt=""
+            className="mt-4 max-h-72 w-full rounded-xl border border-ink/10 object-cover"
+          />
         )}
 
         <div className="mt-6">
@@ -180,9 +197,18 @@ export function FormRunner({
   );
 }
 
-function Centered({ children }: { children: React.ReactNode }) {
+function Centered({
+  children,
+  background,
+}: {
+  children: React.ReactNode;
+  background?: React.CSSProperties;
+}) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-paper px-6 text-center text-ink">
+    <div
+      className="flex min-h-screen items-center justify-center bg-paper px-6 text-center text-ink"
+      style={background}
+    >
       <div className="max-w-lg">{children}</div>
     </div>
   );
@@ -194,7 +220,7 @@ function QuestionInput({
   onChange,
   onEnter,
 }: {
-  question: QuestionRow;
+  question: PublicQuestionRow;
   value: AnswerValue;
   onChange: (value: AnswerValue) => void;
   onEnter: () => void;

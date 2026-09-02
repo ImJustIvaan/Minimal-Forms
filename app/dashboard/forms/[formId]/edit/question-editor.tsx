@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import type { QuestionRow } from "@/lib/types";
 import { CHOICE_TYPES, QUESTION_TYPES } from "@/lib/types";
 import {
   deleteQuestionAction,
+  removeQuestionImageAction,
   updateQuestionAction,
+  uploadQuestionImageAction,
 } from "./actions";
 
 export function QuestionEditor({
@@ -27,6 +29,11 @@ export function QuestionEditor({
   const [optionsText, setOptionsText] = useState(
     question.options.join("\n")
   );
+  const [correctOption, setCorrectOption] = useState(question.correct_option);
+  const [image, setImage] = useState(question.image_url);
+  const [imageError, setImageError] = useState("");
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [isPending, startTransition] = useTransition();
 
   const isChoice = CHOICE_TYPES.includes(question.type);
@@ -38,6 +45,29 @@ export function QuestionEditor({
   function handleDelete() {
     if (!confirm("Delete this question?")) return;
     startTransition(() => deleteQuestionAction(formId, question.id));
+  }
+
+  async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImageError("");
+    setIsUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.set("file", file);
+      const url = await uploadQuestionImageAction(formId, question.id, formData);
+      setImage(url);
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setIsUploadingImage(false);
+    }
+  }
+
+  function handleRemoveImage() {
+    setImage(null);
+    startTransition(() => removeQuestionImageAction(formId, question.id));
   }
 
   return (
@@ -101,19 +131,88 @@ export function QuestionEditor({
           <textarea
             value={optionsText}
             onChange={(e) => setOptionsText(e.target.value)}
-            onBlur={() =>
-              commit({
-                options: optionsText
-                  .split("\n")
-                  .map((o) => o.trim())
-                  .filter(Boolean),
-              })
-            }
+            onBlur={() => {
+              const nextOptions = optionsText
+                .split("\n")
+                .map((o) => o.trim())
+                .filter(Boolean);
+              const patch: Parameters<typeof updateQuestionAction>[2] = {
+                options: nextOptions,
+              };
+              if (correctOption && !nextOptions.includes(correctOption)) {
+                setCorrectOption(null);
+                patch.correct_option = null;
+              }
+              commit(patch);
+            }}
             rows={3}
             className="mt-1 w-full rounded-lg border border-ink/10 bg-paper p-2 text-sm outline-none focus:border-accent"
           />
         </div>
       )}
+
+      {question.type === "multiple_choice" && (
+        <div className="mt-3">
+          <label className="text-xs font-medium text-ink/50">
+            Correct answer (optional — makes this a quiz question)
+          </label>
+          <select
+            value={correctOption ?? ""}
+            onChange={(e) => {
+              const value = e.target.value || null;
+              setCorrectOption(value);
+              commit({ correct_option: value });
+            }}
+            className="mt-1 w-full rounded-lg border border-ink/10 bg-paper p-2 text-sm outline-none focus:border-accent"
+          >
+            <option value="">No correct answer</option>
+            {question.options.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <div className="mt-3">
+        <label className="text-xs font-medium text-ink/50">
+          Question image (optional)
+        </label>
+        <div className="mt-1 flex items-center gap-3">
+          {image && (
+            <div
+              className="h-14 w-14 shrink-0 rounded-lg border border-ink/10 bg-cover bg-center"
+              style={{ backgroundImage: `url(${image})` }}
+            />
+          )}
+          <button
+            type="button"
+            onClick={() => imageInputRef.current?.click()}
+            disabled={isUploadingImage}
+            className="rounded-full border border-ink/15 px-3 py-1.5 text-xs font-medium hover:bg-ink/5 disabled:opacity-50"
+          >
+            {isUploadingImage ? "Uploading…" : image ? "Change" : "Upload"}
+          </button>
+          {image && (
+            <button
+              type="button"
+              onClick={handleRemoveImage}
+              className="text-xs font-medium text-red-600 hover:underline"
+            >
+              Remove
+            </button>
+          )}
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            onChange={handleImageChange}
+            className="hidden"
+          />
+        </div>
+        {imageError && <p className="mt-1 text-xs text-red-600">{imageError}</p>}
+      </div>
 
       <label className="mt-4 flex items-center gap-2 text-sm text-ink/70">
         <input
